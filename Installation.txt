@@ -1,0 +1,837 @@
+####
+#### Installation and configuration manual for Email with SMTP, IMAP and SSL
+#### 	Prerequisites:
+####	-	Server Ubuntu 20.04
+####	- 	MySql
+####	-	PHP
+####	- 	Apache
+####
+####
+####	Configure Hostname
+
+sudo hostnamectl set-hostname mail.exemple.com
+
+####	Update Hosts
+
+vim /etc/hosts
+
+#### Update
+
+127.0.0.1 localhost
+xxx.xxx.xxx.xxx mail.exemple.com mail
+
+#### Install Postfix
+
+apt install postfix postfix-mysql
+
+####	While installing Postfix, the installer asks to choose the configuration type
+####
+####	Keep the option Internet Site selected and press the Right Arrow Key to highlight the OK
+####
+####	Now press Enter Key to configure the hostname example: mail.-exemple.com
+####
+####	Now press Enter to complete the installation. 
+
+
+####	Install Dovecot
+
+apt install dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
+
+####	Install Postgrey, Clam, Amavis, and SpamAssassin
+
+apt install postgrey
+
+####	Install Clam
+
+apt install clamav clamav-daemon
+
+####	Install Amavis
+
+apt install amavis 
+
+####	Install SpamAssassin
+
+apt install spamassassin 
+
+####	Install additional packages
+
+apt install libdbi-perl libdbd-mysql-perl
+
+####	Install OpenDKIM
+
+apt install opendkim opendkim-tools
+
+####
+####	Configure Postfix
+
+apt install --assume-yes ssl-cert
+
+make-ssl-cert generate-default-snakeoil --force-overwrite
+
+####	Backup Configurations
+
+cp /etc/postfix/main.cf /etc/postfix/main.cf.orig
+cp /etc/postfix/master.cf /etc/postfix/master.cf.orig
+
+####	Mails Directory
+
+mkdir -p /<path to vmail>/vmail/
+
+####	Create mail group and user
+
+groupadd -g 5000 vmail
+useradd -g vmail -u 5000 vmail -d /<path to vmail>/vmail
+
+####	Change mails directory owner
+
+chmod 770 /<path to vmail>/vmail
+chown -R vmail:vmail /<path to vmail>/vmail
+
+#### 	Create Header Checks
+
+vim /etc/postfix/header_checks
+
+#### 	Content
+
+/^Received:/ IGNORE
+/^User-Agent:/ IGNORE
+/^X-Mailer:/ IGNORE
+/^X-Originating-IP:/ IGNORE
+/^x-cr-[a-z]*:/ IGNORE
+/^Thread-Index:/ IGNORE
+
+####	MIME header checks
+
+vim /etc/postfix/mime_header_checks
+
+#### 	Content
+
+/name=[^>]*\.(bat|com|exe|dll)/ REJECT
+
+####	Body Checks
+
+vim /etc/postfix/body_checks
+
+
+#### 	Add an empty line for now
+
+#### 	Client Checks
+
+vim  /etc/postfix/client_checks
+
+#### 	Add an empty line for now
+
+#### 	Sender Checks
+
+vim /etc/postfix/sender_checks
+
+#### 	Add an empty line for now
+
+####	Email Database - Create the database to store the virtual users.
+
+#### 	Create User
+
+CREATE USER 'mail'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'dbpassword';
+
+####	Create Database
+
+CREATE DATABASE mail CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+
+#### 	Privileges
+
+GRANT ALL PRIVILEGES ON mail.* TO 'mail'@'localhost';
+FLUSH PRIVILEGES;
+
+####	Virtual domains
+ 
+vim /etc/postfix/mysql_virtual_mailbox_domains.cf
+
+#### 	Content
+
+hosts = 127.0.0.1
+user = mail
+password = dbpassword
+dbname = mail
+query = SELECT domain FROM domain WHERE domain='%s' and backupmx = 0 and active = 1
+
+####	Email addresses
+
+vim /etc/postfix/mysql_virtual_mailbox_maps.cf
+
+####	Content
+
+hosts = 127.0.0.1
+user = mail
+password = dbpassword
+dbname = mail
+query = SELECT goto FROM alias WHERE address='%s' AND active = 1
+
+####	Aliases
+
+vim /etc/postfix/mysql_virtual_alias_maps.cf
+
+####	Content
+
+hosts = 127.0.0.1
+user = mail
+password = dbpassword
+dbname = mail
+query = SELECT goto FROM alias WHERE address='%s' AND active = 1
+
+####	Relays
+
+vim /etc/postfix/mysql_relay_domains.cf
+
+####	Content
+
+hosts = 127.0.0.1
+user = mail
+password = dbpassword
+dbname = mail
+query = SELECT domain FROM domain WHERE domain='%s' and backupmx = 1
+
+####	Configure Postfix Main - Now configure the main file of Postfix as shown below.
+
+vim /etc/postfix/main.cf
+
+####	The complete configurations are shown below. 
+####	You may refer to Postfix documentation to learn more about 
+####	these parameters and their usage. 
+####	Also, update the configurations based on your requirements.
+
+
+#### 	main.cf configuration file, available in another file
+
+
+####
+####	Configure Postfix Master - Now configure the master file of Postfix as shown below.
+
+vim /etc/postfix/master.cf
+
+#### 	master.cf configuration file, available in another file
+
+####	Configure Dovecot
+
+chown -R vmail:dovecot /etc/dovecot
+chmod -R o-rwx /etc/dovecot
+
+####	Main Configuration - Update the main configuration file of Dovecot as shown below.
+
+vim /etc/dovecot/dovecot.conf
+
+####	Updates
+-----
+#### Enable installed protocols
+
+!include_try /usr/share/dovecot/protocols.d/*.protocol
+protocols = imap pop3 lmtp
+
+####	Mail Configuration - Update the mail configuration and specify the mails directory.
+
+#### Updates
+
+#mail_location = mbox:~/mail:INBOX=/var/mail/%u
+mail_location = maildir:/<path to vmail>/vmail/%d/%n
+
+mail_uid = vmail
+mail_gid = vmail
+
+#mail_privileged_group = mail
+mail_privileged_group = vmail
+
+first_valid_uid = 5000
+last_valid_uid = 5000
+
+####	Auth Configuration - Update the auth configuration.
+
+vim /etc/dovecot/conf.d/10-auth.conf
+
+#### 	Updates
+
+disable_plaintext_auth = yes
+auth_mechanisms = plain login
+
+#!include auth-system.conf.ext
+!include auth-sql.conf.ext
+#!include auth-ldap.conf.ext
+
+####	SQL Auth Configuration - Update the auth configuration.
+
+vim /etc/dovecot/conf.d/auth-sql.conf.ext
+
+#### 	Updates
+
+#userdb {
+#  driver = sql
+#  args = /etc/dovecot/dovecot-sql.conf.ext
+#}
+
+userdb {
+  driver = static
+  args = uid=vmail gid=vmail home=/<path to vmail>/vmail/%d/%n
+}
+
+####	DB Configuration - Update the database configuration.
+
+####	Updates
+
+driver = mysql
+
+connect = host=localhost dbname=mail user=mail password=dbpassword
+
+default_pass_scheme = SHA512-CRYPT
+
+password_query = \
+SELECT username as user, password, '/<path to vmail>/vmail/%d/%n' as userdb_home, \
+'maildir:/<path to vmail>/vmail/%d/%n' as userdb_mail, 5000 as userdb_uid, 5000 as userdb_gid \
+FROM mailbox WHERE username = '%u' AND active = '1'
+
+####	Master Configuration - Update the master configuration.
+
+vim /etc/dovecot/conf.d/10-master.conf
+
+####	Updates
+
+
+service imap-login {
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
+}
+
+service pop3-login {
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
+}
+
+service submission-login {
+  inet_listener submission {
+    port = 587
+  }
+}
+
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    mode = 0600
+    user = postfix
+    group = postfix
+  }
+}
+
+service auth {
+
+  unix_listener auth-userdb {
+    mode = 0600
+    user = vmail
+    group = vmail
+  }
+}
+# Postfix smtp-auth
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0666
+    user = postfix
+    group = postfix
+  }
+}
+
+  # Auth process is run as this user.
+  user = dovecot
+
+service auth-worker {
+  # Auth worker process is run as root by default, so that it can access
+  # /etc/shadow. If this isn't necessary, the user should be changed to
+  # $default_internal_user.
+  user = vmail
+}
+
+
+####
+####	SSL Configuration - Update the SSL configuration.
+
+vim  /etc/dovecot/conf.d/10-ssl.conf
+
+####	Updates
+
+ssl = yes
+
+#ssl_cert = </etc/dovecot/private/dovecot.pem
+#ssl_key = </etc/dovecot/private/dovecot.key
+ssl_cert = </etc/letsencrypt/live/mail.example.com/fullchain.pem
+ssl_key = </etc/letsencrypt/live/mail.example.com/privkey.pem
+
+ssl_ca = </etc/letsencrypt/live/mail.example.com/chain.pem
+
+ssl_min_protocol = TLSv1
+
+# Refer - https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
+ssl_cipher_list = ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS:!AESCCM
+
+ssl_prefer_server_ciphers = yes
+
+####
+####	LDA Configuration - Update the LDA configuration.
+
+vim /etc/dovecot/conf.d/15-lda.conf
+
+#### Updates
+
+postmaster_address = postmaster@example.com
+
+####
+####	Configure Postgrey, Clam, Amavis, SpamAssassin, and OpenDKIM
+####
+
+#### Whitelist Clients
+
+vim /etc/postgrey/whitelist_clients.local
+
+#### Clients List
+
+gmail.com
+yahoo.com
+outlook.com
+facebook.com
+hotmail.com
+msn.com
+linkedin.com
+pinterest.com
+reddit.com
+twitter.com
+
+####
+####	Configure the Amavis as shown below.
+
+vim /etc/amavis/conf.d/15-content_filter_mode
+
+####	Update
+
+@bypass_virus_checks_maps = (
+   \%bypass_virus_checks, \@bypass_virus_checks_acl, \$bypass_virus_checks_re);
+
+@bypass_spam_checks_maps = (
+   \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);
+
+
+####	Update User
+sudo nano /etc/amavis/conf.d/50-user
+
+####	Update
+
+$max_servers = 3;
+$sa_tag_level_deflt = -9999;
+
+@lookup_sql_dsn = (
+['DBI:mysql:database=mail;host=127.0.0.1;port=3306',
+'mail',
+'dbpassword']);
+$sql_select_policy = 'SELECT domain from domain WHERE CONCAT("@",domain) IN (%k)';
+
+####	Configure SpamAssassin as shown below.
+####
+####	Enable SpamAssassin
+
+update-rc.d spamassassin enable
+
+####	Update Config
+
+	vim /etc/default/spamassassin
+
+#### 	Update
+
+CRON=1
+
+####
+####	Refresh the Clam Antivirus database.
+
+/etc/init.d/clamav-freshclam stop
+
+freshclam -v
+
+/etc/init.d/clamav-freshclam start
+
+####	Now configure OpenDKIM as shown below.
+
+####	Configure OpenDKIM
+
+vim /etc/default/opendkim
+
+# Comment out
+#SOCKET=local:$RUNDIR/opendkim.sock
+
+# Add at last
+SOCKET="inet:8891@localhost"
+
+
+#### 	Configure OpenDKIM
+
+vim /etc/opendkim.conf
+
+#### Add at the last
+
+SOCKET inet:8891@localhost
+
+####
+####	Configure Monit
+####
+
+vim /etc/monit/conf.d/amavis
+
+####	Content
+
+check process amavisd with pidfile /var/run/amavis/amavisd.pid
+every 5 cycles
+group mail
+start program = "/usr/sbin/service amavis start"
+stop program = "/usr/sbin/service amavis stop"
+if failed port 10024 protocol smtp then restart
+if 5 restarts within 25 cycles then timeout
+
+####	Dovecot Configurations
+
+vim /etc/monit/conf.d/dovecot
+
+####	Content
+
+check process dovecot with pidfile /var/run/dovecot/master.pid
+group mail
+start program = "/usr/sbin/service dovecot start"
+stop program = "/usr/sbin/service dovecot stop"
+group mail
+if failed port 993 for 5 cycles then restart
+if 5 restarts within 25 cycles then timeout
+
+####
+####	Postfix - Add the configurations for Postfix as shown below.
+####
+
+vim /etc/monit/conf.d/postfix
+
+####	Content
+
+check process postfix with pidfile /var/spool/postfix/pid/master.pid
+group mail
+start program = "/usr/sbin/service postfix start"
+stop program = "/usr/sbin/service postfix stop"
+if failed port 25 protocol smtp then restart
+if 5 restarts within 5 cycles then timeout
+
+####
+####	SpamAssassin - Add the configurations for SpamAssassin as shown below.
+
+vim /etc/monit/conf.d/spamassassin
+
+####	Content
+
+check process spamassassin with pidfile /var/run/spamassassin.pid
+group mail
+start program = "/usr/sbin/service spamassassin start"
+stop program = "/usr/sbin/service spamassassin stop"
+if 5 restarts within 5 cycles then timeout
+
+####
+####	Configure Fail2ban
+####
+####	
+####		Default - Configure the DEFAULT block to send emails for the failed attempts as 
+####	shown below. Make sure to create the email accounts for destemail and sender 
+####	while installing the Postfix Admin.
+####
+####	 Local Jail
+
+vim /etc/fail2ban/jail.local
+
+####	Update
+
+[DEFAULT]
+mta = sendmail
+destemail = netban@example.com
+sendername = Admin
+sender = admin@example.com
+action = %(action_mwl)s
+
+####
+####		Postfix - The default filter of Postfix for Fail2ban is available at 
+####	/etc/fail2ban/filter.d/postfix.conf. You may further update it if required. 
+####	Now add the postfix jail as shown below.
+####
+####	Add Dovecot Jail
+
+vim /etc/fail2ban/jail.d/dovecot.conf
+
+####	Content
+
+[dovecot]
+enabled = true
+port = pop3,pop3s,imap,imaps
+filter = dovecot
+logpath = /var/log/mail.log
+
+####
+####
+####	Restart Services
+####
+
+service apache2 restart
+
+service postfix restart
+
+service dovecot restart
+
+service clamav-daemon restart
+
+service amavis restart
+
+service spamassassin restart
+
+service spamassassin restart
+
+service postgrey restart
+
+service postgrey restart
+
+service postgrey restart
+
+####
+####
+####	Install Postfix Admin
+####
+####	This section provides the steps to install Postfix Admin
+####	We can use the Postfix Admin to manage the virtual domains and virtual users
+####	Now download and install the most recent version of Postfix Admin from SourceForge as shown below.	
+####
+####	 Download Postfix Admin
+
+wget https://sourceforge.net/projects/postfixadmin/files/postfixadmin/postfixadmin-3.2/postfixadmin-3.2.tar.gz
+
+####	Extract Postfix Admin
+
+tar -xf postfixadmin-3.2.tar.gz
+
+#### 	Move to www
+
+mkdir -p /var/www/mailadmin.example.com/
+mv postfixadmin-3.2 /var/www/mailadmin.example.com/html
+chown -R www-data:www-data /var/www/mailadmin.example.com/html
+
+####	Create Templates Directory
+
+mkdir -p /var/www/mailadmin.example.com/html/templates_c
+chown -R www-data:www-data /var/www/mailadmin.example.com/html/templates_c
+
+####
+####	The above-mentioned commands installed Postfix Admin at /var/www/mailadmin.example.com/html. 
+####	Now add the virtual hosts as shown below.
+####
+####	Virtual Host - HTTP
+
+vim /etc/apache2/sites-available/mailadmin.example.com.conf
+
+#### Content
+
+<VirtualHost *:80>
+	ServerName mailadmin.example.com
+	ServerAlias mailadmin.example.com
+	ServerAdmin admin@example.com
+
+	DocumentRoot /data/www/mailadmin.example.com/html/public
+	<Directory /data/www/mailadmin.example.com/html/public>
+		Options -Indexes +FollowSymLinks
+		DirectoryIndex index.php
+		AllowOverride All
+		Require all granted
+	</Directory>
+
+	RewriteEngine on
+	RewriteCond %{SERVER_NAME} =mailadmin.example.com
+	RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+</VirtualHost>
+
+####
+####	In case you have used Let's Encrypt to install an SSL certificate
+####	you can update your certificate by adding the mailadmin subdomain as shown below
+####	It will also generate and enable the virtual host for SSL.
+####
+####	Upgrade SSL Certificate
+
+letsencrypt --apache -d -exemple.com,www.-exemple.com,mail.exemple.com,exemple.com --email admin@exemple.com --agree-tos
+
+####	Output
+
+Do you want to expand and replace this existing certificate with the new
+certificate?
+
+(E)xpand/(C)ancel: e
+
+Please choose whether or not to redirect HTTP traffic to HTTPS, removing HTTP access.
+
+1: No redirect - Make no further changes to the webserver configuration.
+2: Redirect - Make all requests redirect to secure HTTPS access. Choose this for
+new sites, or if you're confident your site works on HTTPS. You can undo this
+change by editing your web server's configuration.
+
+Select the appropriate number [1-2] then [enter] (press 'c' to cancel): 2
+
+IMPORTANT NOTES:
+ - Congratulations! Your certificate and chain have been saved at:
+   /etc/letsencrypt/live/example.com/fullchain.pem
+   Your key file has been saved at:
+   /etc/letsencrypt/live/example.com/privkey.pem
+
+####
+####	You can also add the virtual host for SSL
+####	In case you have generated a self-signed certificate or obtained the SSL certificate from the well-known providers
+####	The virtual host for SSL should be similar as shown below.
+
+####	Virtual Host - HTTPS
+vimvim /etc/apache2/sites-available/mailadmin.example.com-le-ssl.conf
+
+####	Content
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+        ServerName mailadmin.example.com
+        ServerAlias mailadmin.example.com
+        ServerAdmin admin@example.com
+
+        DocumentRoot /data/www/mailadmin.example.com/html/public
+        <Directory /data/www/mailadmin.example.com/html/public>
+                Options -Indexes +FollowSymLinks
+                DirectoryIndex index.php
+                AllowOverride All
+                Require all granted
+        </Directory>
+
+        SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem
+        SSLCertificateKeyFile /etc/letsencrypt/live/example.com/privkey.pem
+        Include /etc/letsencrypt/options-ssl-apache.conf
+</VirtualHost>
+</IfModule>
+
+####
+####	Now we will configure Postfix Admin to use the 
+####	database created by us in the previous sections
+
+####	Postfix Admin - Local Config
+vim /var/www/mailadmin.example.com/html/config.local.php
+
+#### Content
+
+<?php
+$CONF['configured'] = true;
+
+$CONF['postfix_admin_url'] = 'https://mailadmin.example.com';
+
+// Database connection details.
+$CONF['database_type'] = 'mysqli';
+$CONF['database_host'] = 'localhost';
+$CONF['database_user'] = 'mail';
+$CONF['database_password'] = 'dbpassword';
+$CONF['database_name'] = 'mail';
+
+$CONF['admin_email'] = 'admin@example.com';
+
+$CONF['smtp_server'] = 'localhost';
+$CONF['smtp_port'] = '25';
+
+$CONF['encrypt'] = 'md5crypt';
+
+$CONF['default_aliases'] = [
+	'abuse' => 'admin@example.com',
+	'hostmaster' => 'admin@example.com',
+	'postmaster' => 'admin@example.com',
+	'webmaster' => 'admin@example.com'
+];
+
+$CONF['show_footer_text'] = 'YES';
+$CONF['footer_text'] = 'Return to example.com';
+$CONF['footer_link'] = 'https://www.example.com';
+
+
+$CONF['domain_path'] = 'NO';
+$CONF['domain_in_mailbox'] = 'YES';
+$CONF['create_mailbox_subdirs_prefix']='';
+
+#### Save and exit the editor
+
+ chown -R www-data:www-data /var/www/mailadmin.example.com/html/config.local.php
+
+####
+####
+####
+####
+####	Configure DKIM
+####
+####
+####	This section provides the steps to generate the DKIM signature for example.com
+####	hough we can use DKIM for multiple domains, this section only provides the configurations for the single domain as shown below
+####	
+####	Update OpenDKIM Conf
+####
+
+vim /etc/opendkim.conf
+
+####	Add at the last
+
+Domain example.com
+KeyFile /etc/postfix/dkim.key
+Selector dkim
+
+####
+####	Now generate the domain key as shown below.
+
+mkdir /mydata/secure/dkim
+
+opendkim-genkey -t -s dkim -d example.com
+
+mv dkim.private /etc/postfix/dkim.key
+chmod 660 /etc/postfix/dkim.key
+chown root:opendkim /etc/postfix/dkim.key
+
+####	Restart OpenDKIM
+
+service opendkim restart
+
+####	Reload and restart Postfix
+
+service postfix reload
+service postfix restart
+
+####
+####	We are also required to update the DNS record by adding the txt record as shown below.
+####
+
+
+####	Remove all the double quotes and generate a single line record 
+
+####	Summary
+
+####		This tutorial provided all the steps and configurations 
+####	required to set up and secure an email or mail server on Ubuntu 20.04 LTS 
+####	using Postfix and Dovecot. It also provided the steps to install and configure 
+####	the additional software, tools, and utilities including Clam as Antivirus, 
+####	Amavis for Content Filter, SpamAssassin to detect spam emails, OpenDKIM, 
+####	Postfix Admin, and Roundcube. It also provided the steps to configure 
+####	Fail2ban and Monit for Postfix and Roundcube.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
