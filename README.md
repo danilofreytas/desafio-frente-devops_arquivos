@@ -1,3 +1,4 @@
-#Olá
-#  Gostaria de informar que no dia em que ia enviar o resultado do teste recebi o e-mail informando que o prazo terminou. Embora isso tenha ocorrido, gostei muito da oportunidade e mesmo que não possam mais avaliar a entrega fico disponível para futuras oportunidad
+# Olá
+
+# Estes arquivos esté referenciado para a instalação e configuração de servidor de e-mail SMTP, IMAP e ssl no Ubuntu 20.04
 
