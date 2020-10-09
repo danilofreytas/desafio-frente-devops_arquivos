@@ -1,0 +1,42 @@
+- Qual arquivo de configuração do apache?
+	O arquivo de configuração do apache é httpd.conf, geralmente localizado no diretório: /etc/httpd/conf/httpd.conf
+
+- Cite ao menos duas cadeias de firewall.  
+	Input - Trafego que tem destino localhost
+	Forward - Trafego que passa no server
+
+- Qual arquivo de configuração do ssh server?
+	Para configurar o ssh server deve alterar o arquivo sshd_config, localizado no diretório: /etc/ssh/sshd.config
+
+- Qual sequência de comandos para adicionar usuário em um grupo?
+	Para adicionar um usuário linux ao um grupo basta um unico comando: adduser User Group
+
+- Como funciona a inicialização do sistema desde a BIOS até o momento em que ele esteja operativo? 
+	Os passos são: Subida da bios, identificando peças como Memoria Ram e Placa de Video; Testes de Hardware, verificando se a fonte de subida do sistema está operacional; Master Boot, verifica qual partição do HD está configurada o codigo de inicialização do sistema operacional; Inicialização do Kernel, estabelecendo comunicação entre a Bios e o Kernel; e por fim tela de  Logon do Sistema Operacional
+
+- Qual o passo a passo de utilização de alto escale group?
+	Analizar necessidade do negocio
+	Ter dados da saúde da aplicação
+	Elaborar especificações tecnicas
+	Criar politicas de escalonamento
+	Implantar auto scaling
+
+	Os passos descritos acima se faz necessário para que as configurações sejam implantadas com sucesso atendendo a necessidade do negocio e valor orçado, para a parte tecnica, a criação de um auto scaling em server linux é: 
+	aws autoscaling create-launch-configuration \
+  --launch-configuration-name CodeDeployDemo-AS-Configuration \
+  --image-id image-id \
+  --key-name key-name \
+  --iam-instance-profile CodeDeployDemo-EC2-Instance-Profile \
+  --instance-type t1.micro
+
+- Quais componentes necessários para ter uma VPC completa?
+	Para ter uma VPC completa e acessivel, é necessário criar uma VPC com range de IP Valido, criar subnetes para este range, configurar rotas, internet gateways e network acls, tendo estas estapas finalizadas a VPC está acessivel de acordo com os IPs liberado no security group e route tables.
+
+- Qual o significado de multi a-z no RDS e como ele é implementado? 
+O Multi A-Z se trata de redundancia de servidores disponiveis na AWS, há datacenters em todo o globo, e em caso de algum incidente em determinada região automaticamente seu ambiente e transferido para ouro datacenter, está configuração e implementada no campo de modificação de cada EC2, RDS ou em qualquer outro serviço da AWS
+
+- Como fazer backup de EC2?
+	Há duas formas de fazer backup de uma EC2, via dashboard ou via aws cli, segue comando aws cli: aws ec2 create-snapshot --volume-id vol-1111 --description "Backup: `date`."
+
+- Como gerenciar firewall dentro da AWS? 
+	Para gerenciar o firewall, tem a opção de criar regras de rotas de IPs dentro da VPC, criar Load Balance, Elastic IP, e entre outras, o gerenciamento é personalizavel de acordo com a necessidade do negocio e valor disponivel.
